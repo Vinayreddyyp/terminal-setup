@@ -25,12 +25,19 @@ return {
     local current = 0
 
     local function open_term(i)
+      if i < 1 then
+        i = 1
+      end
+
       if not terms[i] then
         terms[i] = Terminal:new({
+          count = i, -- ✅ IMPORTANT: fixes "Terminal 1 shows as Terminal 2"
           direction = "float",
           close_on_exit = true,
         })
       end
+
+      current = i
       terms[i]:toggle()
     end
 
@@ -69,60 +76,67 @@ return {
         end,
       }, function(choice)
         if choice and choice.id then
-          current = choice.id
-          open_term(current)
+          open_term(choice.id)
         end
       end)
     end
 
     -- <leader>tn → NEW terminal (like + tab)
     vim.keymap.set("n", "<leader>tn", function()
-      current = current + 1
-      open_term(current)
+      local next_i = last_term_index() + 1
+      open_term(next_i)
     end, { desc = "New Terminal Tab" })
 
     -- <leader>tl → NEXT terminal tab
     vim.keymap.set("n", "<leader>tl", function()
-      if current == 0 then
-        current = 1
-        open_term(current)
+      local last = last_term_index()
+      if last == 0 then
+        open_term(1)
         return
       end
 
-      local next_i = current + 1
-      if not terms[next_i] then
-        next_i = 1 -- wrap
+      local next_i = (current == 0) and 1 or (current + 1)
+      if next_i > last then
+        next_i = 1
       end
-      current = next_i
-      open_term(current)
+      open_term(next_i)
     end, { desc = "Next Terminal Tab" })
 
     -- <leader>th → PREVIOUS terminal tab
     vim.keymap.set("n", "<leader>th", function()
-      if current == 0 then
-        current = 1
-        open_term(current)
+      local last = last_term_index()
+      if last == 0 then
+        open_term(1)
         return
       end
 
-      local prev_i = current - 1
+      local prev_i = (current == 0) and 1 or (current - 1)
       if prev_i < 1 then
-        prev_i = math.max(1, last_term_index()) -- wrap to last
+        prev_i = last
       end
-      current = prev_i
-      open_term(current)
+      open_term(prev_i)
     end, { desc = "Previous Terminal Tab" })
 
-    -- <leader>ts → Show "panel" picker to jump to any terminal
+    -- <leader>ts → Show picker
     vim.keymap.set("n", "<leader>ts", pick_terminal, { desc = "Select Terminal Tab" })
 
-    -- Toggle last used terminal
-    vim.keymap.set("n", "<leader>tt", "<cmd>ToggleTerm direction=float<cr>", {
-      desc = "Toggle Floating Terminal",
-    })
-    vim.keymap.set("n", "<C-\\>", "<cmd>ToggleTerm direction=float<cr>", {
-      desc = "Toggle Floating Terminal",
-    })
+    -- ✅ Make <leader>tt toggle your "current tab terminal" (NOT ToggleTerm default)
+    vim.keymap.set("n", "<leader>tt", function()
+      if current == 0 then
+        -- if nothing created yet, open/create terminal 1
+        open_term(1)
+      else
+        open_term(current)
+      end
+    end, { desc = "Toggle Current Terminal Tab" })
+
+    vim.keymap.set("n", "<C-\\>", function()
+      if current == 0 then
+        open_term(1)
+      else
+        open_term(current)
+      end
+    end, { desc = "Toggle Current Terminal Tab" })
 
     -- ESC closes floating terminal
     vim.api.nvim_create_autocmd("TermOpen", {
